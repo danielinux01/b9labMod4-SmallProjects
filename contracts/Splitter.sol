@@ -4,33 +4,28 @@ contract Splitter
 {
     address public owner;
     
-    address giver;
-    address payee1;
-    address payee2;
+    address public giver;
+    address public payee1;
+    address public payee2;
   
-    event LogContribution(address sender,uint amount);
-    event LogTransferToPayee1(address payee,uint amount);
-    event LogTransferToPayee2(address payee,uint amount);
-    
+    event LogContribution(address indexed sender,uint amount);
+    event LogTransferToPayee(address indexed payee1,address indexed payee2,uint amount);
+        
   
     //********************************************************************
     // Constructor
     //********************************************************************
     function Splitter(address _giver,address _payee1,address _payee2)
     {
-        
+      require(_giver!=address(0));
+      //require(_payee1!=address(0));  
+      //require(_payee2!=address(0));
+
       owner = msg.sender;
       giver = _giver;
       payee1 = _payee1;
       payee2 = _payee2;
-    }
-  
-    //********************************************************************
-    //we can see the balance of the Splitter contract on the web page
-    //********************************************************************
-    function getBalance() constant returns (uint) {
-      return this.balance;
-    }
+    }   
     //--------------------------------------------------------------------
   
     //********************************************************************
@@ -56,17 +51,17 @@ contract Splitter
         payable
         returns(bool success)
     {
-      require(msg.value>0 && msg.value%2==0); // >0 and divisible
+      require(msg.value>0);
+      require(msg.value%2==0); 
       require(msg.sender == giver);
       
       uint valToSend = msg.value / 2;
       
-      payee1.transfer(valToSend);
-      LogTransferToPayee1(payee1,valToSend);
-      
+      payee1.transfer(valToSend);      
       payee2.transfer(valToSend);
-      LogTransferToPayee2(payee2,valToSend);
       
+      LogTransferToPayee(payee1,payee2,valToSend);
+
       return true;
     }
     //--------------------------------------------------------------------
