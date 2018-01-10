@@ -18,8 +18,8 @@ contract Splitter
     function Splitter(address _giver,address _payee1,address _payee2)
     {
       require(_giver!=address(0));
-      //require(_payee1!=address(0));  
-      //require(_payee2!=address(0));
+      require(_payee1!=address(0));  
+      require(_payee2!=address(0));
 
       owner = msg.sender;
       giver = _giver;
