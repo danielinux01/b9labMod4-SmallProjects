@@ -3,88 +3,94 @@ pragma solidity ^0.4.6;
 contract Splitter
 {
     address public owner;
-    
-    address public giver;
-    address public payee1;
-    address public payee2;
-  
-    event LogContribution(address indexed sender,uint amount);
-    event LogTransferToPayee(address indexed payee1,address indexed payee2,uint amount);
-        
+    mapping(address => uint) public pendingWithdrawals;
+
+    event LogPendingAmount(address indexed from,address indexed payee1,address indexed payee2,uint amount);
+    event LogWithdraw(address indexed toAddress,uint amount);
+    event LogAmountReceived(address indexed sender,uint amount);    
   
     //********************************************************************
     // Constructor
     //********************************************************************
-    function Splitter(address _giver,address _payee1,address _payee2)
+    function Splitter() public
     {
-      require(_giver!=address(0));
-      require(_payee1!=address(0));  
-      require(_payee2!=address(0));
-
       owner = msg.sender;
-      giver = _giver;
-      payee1 = _payee1;
-      payee2 = _payee2;
     }   
     //--------------------------------------------------------------------
   
     //********************************************************************
-    // we can see the balances of Alice, Bob and Carol on the web page
-    //********************************************************************
-    function getBalanceOfGiver() constant returns (uint) {
-       return giver.balance;
-    }
-    
-    function getBalanceOfPayee1() constant returns (uint) {
-       return payee1.balance;
-    }
-    
-    function getBalanceOfPayee2() constant returns (uint) {
-      return payee2.balance;
-    }
-    //--------------------------------------------------------------------
-  
-    //********************************************************************
     // whenever Alice sends ether to the contract, half of it goes to Bob and the other half to Carol
+    // make the contract a utility that can be used by David, Emma and 
+    // anybody with an address to split Ether between any 2 other addresses of their own choice
     //********************************************************************
-    function split() 
+    // store how many ethers go to payee1 and payee2 without sending them
+    function split(address payee1, address payee2) 
+        public
         payable
         returns(bool success)
     {
-      require(msg.value>0);
-      require(msg.value%2==0); 
-      require(msg.sender == giver);
-      
+      require(msg.value>0);         // Positive
+      require(msg.value%2==0);      // Divisible 
+      require(payee1!=address(0));  // Check address
+      require(payee2!=address(0));  // Check address
+            
       uint valToSend = msg.value / 2;
       
-      payee1.transfer(valToSend);      
-      payee2.transfer(valToSend);
-      
-      LogTransferToPayee(payee1,payee2,valToSend);
+      pendingWithdrawals[payee1]+=valToSend;
+      pendingWithdrawals[payee2]+=valToSend;
+            
+      LogPendingAmount(msg.sender,payee1,payee2,valToSend);
 
       return true;
+    }
+
+    // Using Withdrawal pattern for transfer ether to msg.sender 
+    // msg.sender must pay gas fee for withdraw
+    function withdraw() public returns (bool result)
+    {
+        require(pendingWithdrawals[msg.sender]>0); 
+        
+        uint amount = pendingWithdrawals[msg.sender];
+        
+        pendingWithdrawals[msg.sender] = 0;
+        msg.sender.transfer(amount);
+        LogWithdraw(msg.sender,amount);
+        
+        return true;
+      
     }
     //--------------------------------------------------------------------
   
     //********************************************************************
-    //we can send ether to it from the web page
+    // we can send ether to it from the web page
     //********************************************************************
-    function() payable
+    function receiveEther() 
+      public
+      payable
+      returns(bool success)
     {
-      // Log event 
-      LogContribution(msg.sender,msg.value);
+      require(msg.value>0);
+
+      return true;
+    }
+    //********************************************************************
+    //Fallback function: 
+    //********************************************************************
+    
+    // Don't accidentally call other functions, revert!
+    function() public
+    {
+      revert();
     }
     //--------------------------------------------------------------------
     
-    //todo: make the contract a utility that can be used by David, Emma and 
-    //anybody with an address to split Ether between any 2 other addresses of their own choice
       
     //********************************************************************
     //add a kill switch to the whole contract
     //********************************************************************
-    function killMe() returns (bool) {
-        require(msg.sender == owner);
-    selfdestruct(owner);
+    function killMe() public returns (bool) {
+      require(msg.sender == owner);
+      selfdestruct(owner);
         return true;
     }
     //--------------------------------------------------------------------
