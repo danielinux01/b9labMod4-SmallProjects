@@ -2,17 +2,33 @@ pragma solidity ^0.4.6;
 
 contract Splitter
 {
+    bool public bStopSignal;
     address public owner;
     mapping(address => uint) public pendingWithdrawals;
 
     event LogPendingAmount(address indexed from,address indexed payee1,address indexed payee2,uint amount);
     event LogWithdraw(address indexed toAddress,uint amount);
-    event LogAmountReceived(address indexed sender,uint amount);    
-  
+    event LogSelfDestruct(address indexed owner,uint amount);
+    event LogDestroySignal(address indexed owner,uint amount);
+
+
+    modifier onlyowner 
+    { 
+          require (msg.sender == owner);
+          _;
+    }
+    
+    modifier notStopped 
+    { 
+          require (!bStopSignal);
+          _;
+    }  
+
     //********************************************************************
     // Constructor
     //********************************************************************
-    function Splitter() public
+    function Splitter() 
+      public
     {
       owner = msg.sender;
     }   
@@ -27,10 +43,11 @@ contract Splitter
     function split(address payee1, address payee2) 
         public
         payable
+        notStopped
         returns(bool success)
     {
       require(msg.value>0);         // Positive
-      require(msg.value%2==0);      // Divisible 
+      require((msg.value&1)==0);      // Divisible 
       require(payee1!=address(0));  // Check address
       require(payee2!=address(0));  // Check address
             
@@ -46,11 +63,13 @@ contract Splitter
 
     // Using Withdrawal pattern for transfer ether to msg.sender 
     // msg.sender must pay gas fee for withdraw
-    function withdraw() public returns (bool result)
+    function withdraw() 
+      public 
+      notStopped
+      returns (bool result)
     {
-        require(pendingWithdrawals[msg.sender]>0); 
-        
         uint amount = pendingWithdrawals[msg.sender];
+        require(amount>0); 
         
         pendingWithdrawals[msg.sender] = 0;
         msg.sender.transfer(amount);
@@ -61,37 +80,57 @@ contract Splitter
     }
     //--------------------------------------------------------------------
   
-    //********************************************************************
-    // we can send ether to it from the web page
-    //********************************************************************
-    function receiveEther() 
-      public
-      payable
-      returns(bool success)
-    {
-      require(msg.value>0);
-
-      return true;
-    }
+    
     //********************************************************************
     //Fallback function: 
     //********************************************************************
     
     // Don't accidentally call other functions, revert!
-    function() public
+    function() 
+      public
     {
       revert();
     }
     //--------------------------------------------------------------------
+          
     
-      
     //********************************************************************
-    //add a kill switch to the whole contract
+    // add a kill switch to the whole contract
+    // Wrap killMe function to avoid sink ether in selfdestruct
     //********************************************************************
-    function killMe() public returns (bool) {
-      require(msg.sender == owner);
-      selfdestruct(owner);
+    function stopSignal(bool)
+      public
+      onlyowner
+      notStopped
+      returns (bool)
+    {
+        bStopSignal = true;
         return true;
+    }
+
+    function destroySignal() 
+        public
+        onlyowner
+        notStopped
+        returns(bool)
+    {
+        
+        if(this.balance>0)
+          owner.transfer(this.balance);
+        
+        LogDestroySignal(owner,this.balance);        
+    }
+
+    function killMe() 
+      public
+      onlyowner
+      returns (bool) 
+    {
+      require(bStopSignal);
+      
+      LogSelfDestruct(owner,this.balance);
+      selfdestruct(owner);
+      return true;
     }
     //--------------------------------------------------------------------
 }
