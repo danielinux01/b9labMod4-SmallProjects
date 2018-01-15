@@ -98,7 +98,7 @@ contract Splitter
     // add a kill switch to the whole contract
     // Wrap killMe function to avoid sink ether in selfdestruct
     //********************************************************************
-    function stopSignal(bool)
+    function stopSignal()
       public
       onlyowner
       notStopped
@@ -108,7 +108,7 @@ contract Splitter
         return true;
     }
 
-    function destroySignal() 
+    function softKill() 
         public
         onlyowner
         notStopped
@@ -118,11 +118,13 @@ contract Splitter
         if(this.balance>0)
           owner.transfer(this.balance);
         
-        LogDestroySignal(owner,this.balance);        
+        LogDestroySignal(owner,this.balance);   
+
+        return killMe();     
     }
 
     function killMe() 
-      public
+      private
       onlyowner
       returns (bool) 
     {
