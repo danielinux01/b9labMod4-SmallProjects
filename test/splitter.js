@@ -1,3 +1,18 @@
+
+// for use import, npm install what???
+//import expectedExceptionPromise from './expected_exception_testRPC_and_geth';
+
+/* after truffle test I have this error:
+import expectedExceptionPromise from './expected_exception_testRPC_and_geth';
+^^^^^^
+
+SyntaxError: Unexpected token import
+    at createScript (vm.js:80:10)
+
+  what can I install?
+
+*/
+
 const Splitter = artifacts.require("./Splitter.sol");
 
 contract('Splitter', function(accounts) {
@@ -10,12 +25,12 @@ contract('Splitter', function(accounts) {
   var payee2 = accounts[3];
   var myContract ;
 
-  // Not resolve bluebird here for using promisify ..... 
-  //const Promise = require("bluebird");
-  //const getBalancePromise = Promise.promisify(web3.eth.getBalance);
+  // npm --save bluebird
+  const Promise = require("bluebird");
+  const getBalancePromise = Promise.promisify(web3.eth.getBalance);
 
   // Building custom getBalancePromise ...
-  function getBalancePromise(queryAddress)
+  /*function getBalancePromise(queryAddress)
   {
     return new Promise((resolve, reject) => {
       web3.eth.getBalance(queryAddress, function(error, balance) { 
@@ -23,7 +38,7 @@ contract('Splitter', function(accounts) {
                   else resolve(balance)
               });
     });
-  };
+  };*/
 
 
   beforeEach(function(){
@@ -34,7 +49,7 @@ contract('Splitter', function(accounts) {
   });
 
   it("should be owned by owner", function() {
-    return myContract.owner()
+    return myContract.owner.call({from:owner})
     .then(function(_owner){
         
         assert.strictEqual(_owner,owner,"Contract is not owned by owner");
@@ -121,24 +136,24 @@ contract('Splitter', function(accounts) {
 
   it("balance of giver should not be splitted to payee1 and payee2 because amount is not divisible",function(){ 
     
-    var wrongContribution = 100001;
-    
+    var wrongContribution = 100001;    
     var transaction=undefined;
 
-
+/*
+    return expectedExceptionPromise(function () {
+        return myContract.split(payee1,payee2,{from:giver,value:wrongContribution});
+    },3000000);
+*/
     return myContract.split(payee1,payee2,{from:giver,value:wrongContribution})
     .then(function(txn){
       transaction = txn;
       assert.isTrue(false,"Transacion executed without exception");
     })
     .catch(error => {assert.strictEqual(transaction,undefined,"Transaction revert");});
-
+    
 
   }); // it("balance of giver should not be splitted to payee1 and payee2 because amount is not divisible"
 
-  // Now you should test when the contribution is odd, and the withdraw.
-
-
-
+  
 
 });

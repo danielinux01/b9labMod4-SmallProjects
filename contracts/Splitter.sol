@@ -1,39 +1,15 @@
 pragma solidity ^0.4.6;
 
-contract Splitter
+import "./SoftKillable.sol";
+
+contract Splitter is SoftKillable
 {
-    bool public bStopSignal;
-    address public owner;
+    
     mapping(address => uint) public pendingWithdrawals;
 
     event LogPendingAmount(address indexed from,address indexed payee1,address indexed payee2,uint amount);
     event LogWithdraw(address indexed toAddress,uint amount);
-    event LogSelfDestruct(address indexed owner,uint amount);
-    event LogDestroySignal(address indexed owner,uint amount);
-
-
-    modifier onlyowner 
-    { 
-          require (msg.sender == owner);
-          _;
-    }
     
-    modifier notStopped 
-    { 
-          require (!bStopSignal);
-          _;
-    }  
-
-    //********************************************************************
-    // Constructor
-    //********************************************************************
-    function Splitter() 
-      public
-    {
-      owner = msg.sender;
-    }   
-    //--------------------------------------------------------------------
-  
     //********************************************************************
     // whenever Alice sends ether to the contract, half of it goes to Bob and the other half to Carol
     // make the contract a utility that can be used by David, Emma and 
@@ -43,7 +19,7 @@ contract Splitter
     function split(address payee1, address payee2) 
         public
         payable
-        notStopped
+        isAlive
         returns(bool success)
     {
       require(msg.value>0);         // Positive
@@ -65,16 +41,16 @@ contract Splitter
     // msg.sender must pay gas fee for withdraw
     function withdraw() 
       public 
-      notStopped
+      isAlive
       returns (bool result)
     {
         uint amount = pendingWithdrawals[msg.sender];
         require(amount>0); 
         
         pendingWithdrawals[msg.sender] = 0;
-        msg.sender.transfer(amount);
         LogWithdraw(msg.sender,amount);
-        
+        msg.sender.transfer(amount);
+                
         return true;
       
     }
@@ -93,46 +69,4 @@ contract Splitter
     }
     //--------------------------------------------------------------------
           
-    
-    //********************************************************************
-    // add a kill switch to the whole contract
-    // Wrap killMe function to avoid sink ether in selfdestruct
-    //********************************************************************
-    function stopSignal()
-      public
-      onlyowner
-      notStopped
-      returns (bool)
-    {
-        bStopSignal = true;
-        return true;
-    }
-
-    function softKill() 
-        public
-        onlyowner
-        notStopped
-        returns(bool)
-    {
-        
-        if(this.balance>0)
-          owner.transfer(this.balance);
-        
-        LogDestroySignal(owner,this.balance);   
-
-        return killMe();     
-    }
-
-    function killMe() 
-      private
-      onlyowner
-      returns (bool) 
-    {
-      require(bStopSignal);
-      
-      LogSelfDestruct(owner,this.balance);
-      selfdestruct(owner);
-      return true;
-    }
-    //--------------------------------------------------------------------
 }
