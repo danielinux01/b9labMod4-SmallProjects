@@ -1,8 +1,8 @@
 pragma solidity ^0.4.6;
 
-import "./SoftKillable.sol";
+import "./Stoppable.sol";
 
-contract Splitter is SoftKillable
+contract Splitter is Stoppable
 {
     
     mapping(address => uint) public pendingWithdrawals;
@@ -19,7 +19,7 @@ contract Splitter is SoftKillable
     function split(address payee1, address payee2) 
         public
         payable
-        isAlive
+        onlyIfRunning
         returns(bool success)
     {
       require(msg.value>0);         // Positive
@@ -41,7 +41,7 @@ contract Splitter is SoftKillable
     // msg.sender must pay gas fee for withdraw
     function withdraw() 
       public 
-      isAlive
+      onlyIfRunning
       returns (bool result)
     {
         uint amount = pendingWithdrawals[msg.sender];

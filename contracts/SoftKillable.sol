@@ -25,7 +25,7 @@ contract SoftKillable is Owned
     
     function stop()
       public
-      onlyowner
+      onlyOwner
       isAlive
       returns (bool)
     {
@@ -36,7 +36,7 @@ contract SoftKillable is Owned
     
     function killMe() 
       public
-      onlyowner
+      onlyOwner
       isStopped
       returns (bool) 
     {      

@@ -1,159 +1,190 @@
-
-// for use import, npm install what???
-//import expectedExceptionPromise from './expected_exception_testRPC_and_geth';
-
-/* after truffle test I have this error:
-import expectedExceptionPromise from './expected_exception_testRPC_and_geth';
-^^^^^^
-
-SyntaxError: Unexpected token import
-    at createScript (vm.js:80:10)
-
-  what can I install?
-
-*/
-
+const Promise = require("bluebird"); // npm install  bluebird --save
 const Splitter = artifacts.require("./Splitter.sol");
+
+web3.eth.makeSureHasAtLeast = require("./utils/makeSureHasAtLeast.js");
+web3.eth.makeSureAreUnlocked = require("./utils/makeSureAreUnlocked.js");
+web3.eth.getTransactionReceiptMined = require("./utils/getTransactionReceiptMined.js");
+
+const expectedException = require("./utils/expectedException.js");
+
+if (typeof web3.eth.getBalancePromise !== "function") {
+    Promise.promisifyAll(web3.eth, { suffix: "Promise" });
+}
 
 contract('Splitter', function(accounts) {
   //console.log("network:", network);
-  console.log("accounts:", accounts);
+  //console.log("accounts passed:", accounts);
 
-  var owner = accounts[0];
-  var giver = accounts[1];
-  var payee1 = accounts[2];
-  var payee2 = accounts[3];
-  var myContract ;
-
-  // npm --save bluebird
-  const Promise = require("bluebird");
-  const getBalancePromise = Promise.promisify(web3.eth.getBalance);
-
-  // Building custom getBalancePromise ...
-  /*function getBalancePromise(queryAddress)
-  {
-    return new Promise((resolve, reject) => {
-      web3.eth.getBalance(queryAddress, function(error, balance) { 
-                  if (error) reject(error)
-                  else resolve(balance)
-              });
-    });
-  };*/
+  let giver, payee1, payee2, splitter ;
+  
+  before("Should have at least 3 unlocked accounts with balance", function(){
+    assert.isAtLeast(accounts.length,3,"should have at least 3 accounts");
+    [giver, payee1,payee2] = accounts;
+    return web3.eth.makeSureAreUnlocked([ giver, payee1, payee2 ])
+            .then(() => web3.eth.makeSureHasAtLeast(giver, [ payee1, payee2 ], web3.toWei(2)))
+            .then(txHashes => web3.eth.getTransactionReceiptMined(txHashes));
+  });
 
 
-  beforeEach(function(){
-    return Splitter.new({from:owner})
+  beforeEach("deploy new Splitter",function(){
+    return Splitter.new({from:giver})
     .then(function(instance){
-      myContract = instance;
+      splitter = instance;
     });
   });
 
-  it("should be owned by owner", function() {
-    return myContract.owner.call({from:owner})
+  it("should be owned by giver", function() {
+    return splitter.owner.call({from:giver})
     .then(function(_owner){
-        
-        assert.strictEqual(_owner,owner,"Contract is not owned by owner");
-
+        assert.strictEqual(_owner,giver,"Contract is not owned by owner");
     });
 
   });
-  
 
-  it("balance of giver should be splitted to payee1 and payee2",function(){ 
-    var initialBalanceOfContract;
-    var initialBalanceOfGiver;
-    var initialBalanceOfPayee1;
-    var initialBalanceOfPayee2;
-    
-    var currentBalanceOfContract;
-    var currentBalanceOfGiver;
-    var currentBalanceOfPayee1;
-    var currentBalanceOfPayee2;
-    
-    var contribution = 100000;
-    var oddContribution = 1000001;
+  it("should reject direct transaction with value", function() {
+        return expectedException(
+            () => splitter.sendTransaction({ from: giver, value: 1, gas: 3000000 }),
+            3000000);
+  });
 
 
 
+  describe("split", function() {
 
-    return getBalancePromise(myContract.address)
-    .then(balance => {
-        initialBalanceOfContract = balance;       
-        return getBalancePromise(giver);
-    })
-    .then(balance=> {
-      initialBalanceOfGiver = balance;
-       return getBalancePromise(payee1);
-    })
-    .then(balance=> {
-      initialBalanceOfPayee1 = balance;
-       return getBalancePromise(payee2);
-    })
-    .then(balance=> {
-      initialBalanceOfPayee2 = balance;
-      return myContract.split(payee1,payee2,{from:giver,value:contribution})
-
-    })
-    .then(function(txn){
-      return getBalancePromise(myContract.address)
-    })
-    .then(balance => {
-        currentBalanceOfContract = balance;       
-        return getBalancePromise(giver);
-    })
-    .then(balance=> {
-      currentBalanceOfGiver = balance;
-      assert.strictEqual(currentBalanceOfContract.toNumber(),initialBalanceOfContract.toNumber()+contribution,"Wrong Contract balance!");
-      return myContract.withdraw({from:payee1});
-    })
-    .then(txn => {
-      
-      return getBalancePromise(payee1);
-    })
-    .then(balance=> {
-      currentBalanceOfPayee1 = balance;
-      
-      assert.isBelow(currentBalanceOfPayee1.toNumber(),initialBalanceOfPayee1.toNumber()+contribution/2,"Wrong payee1 balance!");
-      
-      return myContract.withdraw({from:payee2});
-    })
-    .then(txn => {
-      
-      return getBalancePromise(payee2);
-    })
-    .then(balance=> {
-      currentBalanceOfPayee2 = balance;
-      assert.isBelow(currentBalanceOfPayee2.toNumber(),initialBalanceOfPayee2.toNumber()+contribution/2,"Wrong payee2 balance!");
-      return getBalancePromise(myContract.address);
-    })
-    .then(balance=>{
-      currentBalanceOfContract = balance;
-      assert.strictEqual(currentBalanceOfContract.toNumber(),initialBalanceOfContract.toNumber(),"Wrong final Contract balance!");
+    it("should reject without Eth",function(){
+        return expectedException(
+          () => splitter.split(payee1,payee2,{from: giver,gas:3000000}),
+          3000000 );      
     });
 
-  }); // it("balance of giver should be splitted to payee1 and payee2"
+    it("should reject with 1 wei", function() {
+        return expectedException(
+            () => splitter.split(payee1, payee2, { from: giver, value: 1, gas: 3000000 }),
+            3000000);
+    });
+
+    it("should reject with odd Eth", function() {
+        return expectedException(
+            () => splitter.split(payee1, payee2, { from: giver, value: 7, gas: 3000000 }),
+            3000000);
+    });
+
+    it("should reject without payees", function() {
+        return expectedException(
+            () => splitter.split(0, 0, { from: giver, value: 2, gas: 3000000 }),
+            3000000);
+    });
+
+    it("should reject without payee1", function() {
+        return expectedException(
+            () => splitter.split(payee1, 0, { from: giver, value: 2, gas: 3000000 }),
+            3000000);
+    });
+
+    it("should reject without payee2", function() {
+        return expectedException(
+            () => splitter.split(0, payee2, { from: giver, value: 2, gas: 3000000 }),
+            3000000);
+    });
+
+    it("should keep Weis in contract when split", function() {
+        return splitter.split(payee1, payee2, { from: giver, value: 2 })
+            .then(txObject => web3.eth.getBalancePromise(splitter.address))
+            .then(balance => assert.strictEqual(balance.toString(10), "2"));
+    });
+
+    it("should record owed un/equally when split", function() {
+        return splitter.split(payee1, payee2, { from: giver, value: 2  })
+            .then(txObject => splitter.pendingWithdrawals(payee1))
+            .then(owedP1 => assert.strictEqual(owedP1.toString(10), "1"))
+            .then(() => splitter.pendingWithdrawals(payee2))
+            .then(owedP2 => assert.strictEqual(owedP2.toString(10), "1"));
+    });
+  });
+
+  describe("withdraw", function() {
+
+        beforeEach("split 100 first", function() {
+            return splitter.split(payee1, payee2, { from: giver, value: 100 });
+        });
+
+        it("should reject withdraw by giver", function() {
+            return expectedException(
+                () => splitter.withdraw({ from: giver, gas: 3000000 }),
+                3000000);
+        });
+
+        it("should reject withdraw if value passed", function() {
+            return splitter.withdraw({ from: payee1, value: 10 })
+                .then(
+                    txObject => assert.fail("Should not have been accepted"),
+                    e => assert.isAtLeast(e.message.indexOf("Cannot send value to non-payable function"), 0)
+                );
+        });
 
 
-  it("balance of giver should not be splitted to payee1 and payee2 because amount is not divisible",function(){ 
+        it("should reduce splitter balance by withdrawn amount", function() {
+            return splitter.withdraw({ from: payee1 })
+                .then(txObject => web3.eth.getBalancePromise(splitter.address))
+                .then(balance => assert.strictEqual(balance.toString(10), "50"));
+        });
+
+        it("should increase payee1 balance with amount", function() {
+            let P1BalanceBefore, txFee;
+            return web3.eth.getBalancePromise(payee1)
+                .then(balance => P1BalanceBefore = balance)
+                .then(() => splitter.withdraw({ from: payee1 }))
+                .then(txObject => web3.eth.getTransactionPromise(txObject.tx)
+                .then(tx => txFee = tx.gasPrice.times(txObject.receipt.gasUsed)))
+                .then(() => web3.eth.getBalancePromise(payee1))
+                .then(balance => assert.strictEqual(
+                    P1BalanceBefore.plus(50).minus(txFee).toString(10),
+                    balance.toString(10)));
+        });
+
+        it("should reject payee1 withdrawing twice", function() {
+            return splitter.withdraw({ from: payee1 })
+                .then(txObject => expectedException(
+                    () => splitter.withdraw({ from: payee1, gas: 3000000 }),
+                    3000000));
+        });
+
+        it("should not withdraw after stop", function(){
+            return splitter.runSwitch(false,{from:giver})
+                .then(txObject => expectedException(
+                    () => splitter.withdraw({ from: payee1, gas: 3000000 }),
+                    3000000));
+             
+        });
+
+        it("should withdraw after stop and start", function(){
+            return splitter.runSwitch(false,{from:giver})
+                .then(txObject => splitter.runSwitch(true,{from:giver}))
+                .then(txObject => splitter.withdraw({ from: payee1}))
+                .then(txObject => {/*console.log(txObject.receipt);*/ assert.strictEqual(txObject.receipt.status,1);});
+        });
+
+
+  });
+
+
+  describe("Stoppable", function() {
     
-    var wrongContribution = 100001;    
-    var transaction=undefined;
+    it("should stoppable from giver", function() {
+            return splitter.runSwitch(false, {from:giver})
+            .then(txObject=> { assert.strictEqual(txObject.receipt.status,1);});
 
-/*
-    return expectedExceptionPromise(function () {
-        return myContract.split(payee1,payee2,{from:giver,value:wrongContribution});
-    },3000000);
-*/
-    return myContract.split(payee1,payee2,{from:giver,value:wrongContribution})
-    .then(function(txn){
-      transaction = txn;
-      assert.isTrue(false,"Transacion executed without exception");
-    })
-    .catch(error => {assert.strictEqual(transaction,undefined,"Transaction revert");});
-    
+    });
 
-  }); // it("balance of giver should not be splitted to payee1 and payee2 because amount is not divisible"
+    it("should not stoppable from payee1", function() {
+            return expectedException(
+                () => splitter.runSwitch(false, {from:payee1, gas: 3000000 }),
+                3000000);
+        });
 
-  
+
+  });
+
+   
 
 });
