@@ -23,11 +23,11 @@ module.exports = function makeSureHasAtLeast(richAccount, recipients, wei) {
                     }),
             []))
         .reduce( // Remove non transactions
-        (reduced, txHash) => {
-            if (typeof txHash === "string") {
-                reduced.push(txHash);
-            }
-            return reduced;
-        },
+            (reduced, txHash) => {
+                if (typeof txHash === "string") {
+                    reduced.push(txHash);
+                }
+                return reduced;
+            },
         []);
 }; 
